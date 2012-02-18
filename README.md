@@ -53,7 +53,7 @@ get() the fund's ID:
 
 	$this->donor_tools->get('fund', 123);
 
-### Create (POST) Data
+### Start A Create (POST) Object
 
 Before we can just start adding data to the object willy-nilly, we need to instantiate the type of
 data we are going to send. We'll use the singular form of the type of data we want to send. For
@@ -61,7 +61,7 @@ example a persona:
 
 	$this->donor_tools->startData('persona');
 
-Now we can start adding whatever tag we like. There are are three ways to do this.
+Now we can start adding whatever tag we like. There are are two ways to do this.
 
 #### General Data
 
@@ -81,27 +81,37 @@ Or maybe some tags:
 
 	$this->donor_tools->addData('tag-list', array('Tag One', 'Tag Two'));
 
-#### Set Data
+#### Set Data (Removed)
 
-Personas can have multiple names, emails, addresses and phone numbers associated with them.
-Therefore we must treat each of those data differently. We could add a name:
+The addSet() method is no longer with us. :( But the good news is addData() has taken over its job
+and does a great job at it. The old way to add a set of names would have been like so:
 
 	$this->donor_tools->addSet('name', array(
 		'first-name' => 'Some',
 		'last-name' => 'Name',
 		));
-
-Or even two!
-
 	$this->donor_tools->addSet('name', array(
 		'first-name' => 'Another',
 		'last-name' => 'Name',
 		));
 
-Notice that for the set name, we're using the singular form. The library will automatically
-"pluralize" the name for the tag. One more example - an email:
+That won't work anymore. But now we can do the same thing with the addData() method. All we need is
+a numeric array of our array data.
 
-	$this->donor_tools->addSet('email-address', array('email-address' => 'test@example.com'));
+	$names = array(
+		array(
+			'first-name' => 'Some',
+			'last-name' => 'Name',
+			),
+		array(
+			'first-name' => 'Another',
+			'last-name' => 'Name',
+			),
+		);
+	$this->donor_tools->addData('names', $names);
+
+Notice when we add the data with addData, we're using the plural form of "names". The library will
+automatically "singularize" the name for the tag.
 
 #### Money
 
@@ -111,6 +121,8 @@ type, it has its own method:
 	$this->donor_tools->addMoney('goal', 1500.00);
 
 Obviously personas don't have a money data type, but funds do!
+
+### Send A Create (POST) Request
 
 Now that we have all the data we want to add, we send the create request:
 
@@ -151,7 +163,26 @@ Or for sources
 	$this->donor_tools->replacementSource(19);
 	$this->donor_tools->delete('source', 1234);
 
-For a full set of examples with more values and error handling, check out the files in the /controllers folder.
+#### Relationships
+
+You can create relationships between two personas in the system with the relationship object:
+
+	$this->donor_tools->startData('relationship');
+
+And then set up the required data.
+
+	$this->donor_tools->addData('persona-id', $person_id);
+	$this->donor_tools->addData('inverse-persona-id', $inverse_person_id);
+	$this->donor_tools->addData('relationship-type-id', 25);
+	if( $this->donor_tools->create($person_id);
+
+For a full example of realtionship management and list of possible relationship-type-id's, see
+/controllers/relationships.php
+
+#### But Wait, There's More!
+
+I've included examples of pretty much anything the API will allow. For a full set of examples with
+more values and error handling, check out the files in the /controllers folder.
 
 Enjoy!
 [SammyK](http://sammyk.me/)

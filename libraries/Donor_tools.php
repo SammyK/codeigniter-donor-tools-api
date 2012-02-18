@@ -1,14 +1,16 @@
 <?php defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
- * Donortools.com API Integration
+ * Donortools.com API Library
  *
- * For Donortools.com API integration
+ * For integrating DonorTools.com RESTful API
  *
  * @package        	CodeIgniter
  * @subpackage    	Libraries
  * @category    	Libraries
  * @author		SammyK (http://sammyk.me/)
+ * @link		https://github.com/SammyK/codeigniter-donor-tools-api
+ * @version		1.1
  */
 
 class Donor_tools
@@ -26,8 +28,11 @@ class Donor_tools
 		'donations' => '/donations.xml',
 		'donation' => '/donations/%s.xml',
 		'organization' => '/settings/organization.xml',
-		'personas' => '/personas.xml',
-		'persona' => '/personas/%s.xml',
+		'personas' => '/people.xml',
+		'persona' => '/people/%s.xml',
+		'relationships-all' => '/relationships.xml',
+		'relationships' => '/people/%s/relationships.xml',
+		'relationship' => '/people/%s/relationships/%s.xml',
 		// GET only
 		'organization-count' => '/dashboard/count.xml', // Not actual tag name
 		'soft-credits' => '/soft_credits.xml',
@@ -35,6 +40,10 @@ class Donor_tools
 		'donation-types' => '/settings/donation_types.xml',
 		'name-types' => '/settings/name_types.xml',
 		'address-types' => '/settings/address_types.xml',
+		// Checks for what fields are available for creating new entries 
+		'persona-new' => '/people/new.xml',
+		'donation-new' => '/donations/new.xml',
+		'relationship-new' => '/people/%s/relationships/new.xml',
 		);
 	
     private $current_page;				// Page we are on
@@ -144,8 +153,18 @@ class Donor_tools
 	{
 		if( is_array($value) )
 		{
-			$new_node = $this->_getNode($key, array('key' => 'type', 'value' => 'array'));
-			$this->_addArray($value, $new_node, $key);
+			// If this is an associative array, add normally
+			if( $this->isAssoc($value) )
+			{
+				$new_node = $this->_getNode($key);
+				$this->_addArray($value, $new_node, $key);
+			}
+			// Numeric indexes have array attribute on children
+			else
+			{
+				$new_node = $this->_getNode($key, array('key' => 'type', 'value' => 'array'));
+				$this->_addArray($value, $new_node, singular($key));
+			}
 		}
 		elseif( is_bool($value) )
 		{
@@ -184,19 +203,6 @@ class Donor_tools
 		}
 	}
 	
-	// Add a set of data
-	public function addSet( $name, $data )
-	{
-		$node = $this->_getNode(plural($name, TRUE), array('key' => 'type', 'value' => 'array'));
-		
-		$new_node = $node->addChild($name);
-		
-		foreach( $data as $key => $value )
-		{
-			$this->_addData($key, $value, $new_node);
-		}
-	}
-	
 	// Try to find a node, if not exists, create it
 	private function _getNode( $name, $attr_data = NULL )
 	{
@@ -229,8 +235,18 @@ class Donor_tools
 			if( is_array($value) )
 			{
 				$subnode = $node->addChild($key);
-				$subnode->addAttribute('type','array');
-				$this->_addArray($value, $subnode, $key);
+				
+				// If this is an associative array, add normally
+				if( $this->isAssoc($value) )
+				{
+					$this->_addArray($value, $subnode, $key);
+				}
+				// Numeric indexes have array attribute on children
+				else
+				{
+					$subnode->addAttribute('type','array');
+					$this->_addArray($value, $subnode, singular($key));
+				}
 			}
 			else
 			{
@@ -261,9 +277,9 @@ class Donor_tools
 	}
 	
 	// POST a request
-	public function create()
+	public function create( $id = 0 )
 	{
-		$url = $this->generateUrl(plural($this->type, TRUE));
+		$url = $this->generateUrl(plural($this->type, TRUE), $id);
 		if( $url === FALSE ) return FALSE;
 		
 		$this->CI->curl->create($url);
@@ -298,9 +314,9 @@ class Donor_tools
 	}
 	
 	// PUT a request
-	public function update( $id = 0 )
+	public function update( $id = 0, $id2 = 0 )
 	{
-		$url = $this->generateUrl($this->type, $id);
+		$url = $this->generateUrl($this->type, $id, $id2);
 		if( $url === FALSE ) return FALSE;
 		
 		$this->CI->curl->create($url);
@@ -333,9 +349,9 @@ class Donor_tools
 	}
 	
 	// DELETE a request
-	public function delete( $type, $id )
+	public function delete( $type, $id, $id2 = 0 )
 	{
-		$url = $this->generateUrl($type, $id);
+		$url = $this->generateUrl($type, $id, $id2);
 		if( $url === FALSE ) return FALSE;
 		
 		$this->CI->curl->create($url);
@@ -366,7 +382,8 @@ class Donor_tools
 	{
 		if( $response === FALSE )
 		{
-			$this->error = 'There was a problem while contacting DonorTools.com. Please try again.';
+			$append = isset($this->CI->curl->info['http_code']) ? ' HTTP Code: ' . $this->CI->curl->info['http_code'] : '';
+			$this->error = 'There was a problem while contacting DonorTools.com. Please try again.' . $append;
 			return FALSE;
 		}
 		elseif( is_string($response) )
@@ -396,7 +413,7 @@ class Donor_tools
 	}
 	
 	// Generate the URL that we'll be using for the API
-	public function generateUrl( $type, $id = 0 )
+	public function generateUrl( $type, $id = 0, $id2 = 0 )
 	{
 		if( !isset($this->api_url_actions[$type]) )
 		{
@@ -430,7 +447,7 @@ class Donor_tools
 		
 		$append = count($pairs) > 0 ? '?' . http_build_query($pairs, NULL, '&') : '';
 		
-		return $this->api_url . sprintf($this->api_url_actions[$type], $id) . $append;
+		return $this->api_url . sprintf($this->api_url_actions[$type], $id, $id2) . $append;
 	}
 	
 	// Get the headers we'll need for the request
@@ -551,6 +568,12 @@ class Donor_tools
 		return isset($this->response->id) ? (int)$this->response->id : 0;
 	}
 	
+	// Get the persona-id of the last created entry
+	public function getPersonaId()
+	{
+		return isset($this->response->{'persona-id'}) ? (int)$this->response->{'persona-id'} : 0;
+	}
+	
 	// Show debug info
 	public function debug( $show_curl_debug = FALSE )
 	{
@@ -560,7 +583,7 @@ class Donor_tools
 		
 		if( !empty($this->error) )
 		{
-			echo '<p>' . $this->error . '"</p>';
+			echo '<p>' . $this->error . '</p>';
 		}
 		
 		if( isset($this->send_data) )
@@ -594,6 +617,12 @@ class Donor_tools
 		$dom->formatOutput = TRUE;
 		$dom->loadXML($xml->asXML());
 		return $dom->saveXML();
+	}
+	
+	// Check if an array is associative or not
+	public function isAssoc( $arr )
+	{
+		return array_keys($arr) !== range(0, count($arr) - 1);
 	}
 	
 	// Reset everything so we can go again
