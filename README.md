@@ -1,5 +1,6 @@
-Codeigniter DonorTools.com API Integration
-==========================================
+# [INACTIVE] Codeigniter DonorTools.com API Integration
+
+> **Warning:** This repo is no longer being mantianed. Use at your own risk.
 
 A library that allows you to manage nearly every aspect of your donor tools account.
 
